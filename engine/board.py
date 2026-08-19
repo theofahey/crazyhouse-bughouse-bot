@@ -1,43 +1,34 @@
 """
-Crazyhouse board representation.
-
-Wraps python-chess's Board and adds the piece reserve ("pieces in hand")
-needed for drop moves. Standard chess.Board already tracks position and
-legal moves for regular chess moves -- what we need to add:
-
-  1. A reserve: dict[chess.Color, dict[chess.PieceType, int]] tracking how
-     many of each piece type each side can drop.
-  2. When a piece is captured, it should be added to the CAPTURING side's
-     reserve (as its own color, and demoted to a pawn if it was promoted --
-     this is a real crazyhouse/bughouse rule, not just bughouse).
-  3. Drop moves aren't representable by chess.Move directly, so we'll need
-     our own move representation (or encode drops as a special UCI-like
-     string, e.g. "P@e4" for "drop a pawn on e4" -- this is the convention
-     python-chess-variant engines and lichess both use).
-
-TODO (first task): implement CrazyhouseBoard.__init__ and reserve tracking.
+TODO (Day 1, task 2): override _push_capture on BughouseBoard so it adds to
+self.partner's pocket instead of self's own. Work out the destination color
+expression yourself before looking anything up -- given the diagonal
+pairing, and given that the base class's `self.pockets[self.turn]` is
+already known to resolve to "the color that just captured" (verified
+above), what expression on the PARTNER board gets you their pocket?
 """
 
 import chess
+import chess.variant as variant
 
 
-class CrazyhouseBoard:
+class BughouseBoard(variant.CrazyhouseBoard):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.partner: "BughouseBoard | None" = None  # linked by BughouseGame
+
+    def _push_capture(self, move, capture_square, piece_type, was_promoted):
+        if was_promoted: 
+            self.partner.pockets[not self.turn].add(chess.PAWN)
+        else:
+            self.partner.pockets[not self.turn].add(piece_type)
+
+
+class BughouseGame:
+    """Owns the two linked boards. Turn/clock coordination TBD -- see the
+    open questions in the project notes before building this out further."""
+
     def __init__(self):
-        self.board = chess.Board()
-        # TODO: reserve[color][piece_type] -> count
-        self.reserve = None
-
-    def legal_drops(self, color: chess.Color) -> list:
-        """Return legal drop squares for pieces currently in `color`'s reserve.
-
-        Rules to encode here:
-          - No pawn drops on rank 1 or rank 8
-          - Target square must be empty
-          - (later) a drop that doesn't resolve check is illegal, same as
-            any other move
-        """
-        raise NotImplementedError
-
-    def push_drop(self, piece_type: chess.PieceType, square: chess.Square):
-        """Apply a drop move: remove one piece_type from reserve, place it."""
-        raise NotImplementedError
+        self.board_a = BughouseBoard()
+        self.board_b = BughouseBoard()
+        self.board_a.partner = self.board_b
+        self.board_b.partner = self.board_a
