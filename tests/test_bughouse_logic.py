@@ -7,6 +7,8 @@ diagonal pocket routing on capture.
 
 import chess
 from engine.board import BughouseGame
+import search.random_agent as random_agent
+
 
 
 def test_capture_goes_to_partners_pocket_not_own():
@@ -67,3 +69,14 @@ def test_promoted_piece_still_reverts_to_pawn_when_routed_to_partner():
     assert len(board_b.pockets[0]) == 1
     assert board_b.pockets[0].count(chess.PAWN) == 1
 
+def test_run_self_play_game_with_random_agent():
+    # Will run a round of self play chess with a max steps value of 3,000.
+    # Will test to ensure the game reaches an end state, and max_steps hasn't been reached. 
+    # It's theoretically possible for max_steps to be reached (without any errors) since moves are chosen randomly but it's essentially impossible
+    game = BughouseGame()
+    num_turns = game.run_self_play_game(random_agent.pick_move, max_moves=3000)
+    assert num_turns < 3000
+    assert game.is_over() 
+    print(game.board_a)
+    print([move.uci() for move in game.board_a.move_stack]) 
+    assert False
