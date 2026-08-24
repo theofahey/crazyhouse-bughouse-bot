@@ -8,6 +8,7 @@ diagonal pocket routing on capture.
 import chess
 from engine.board import BughouseGame
 import search.random_agent as random_agent
+import search.mcts as mcts
 
 
 
@@ -74,9 +75,22 @@ def test_run_self_play_game_with_random_agent():
     # Will test to ensure the game reaches an end state, and max_steps hasn't been reached. 
     # It's theoretically possible for max_steps to be reached (without any errors) since moves are chosen randomly but it's essentially impossible
     game = BughouseGame()
-    num_turns = game.run_self_play_game(random_agent.pick_move, max_moves=3000)
-    assert num_turns < 3000
-    assert game.is_over() 
-    print(game.board_a)
-    print([move.uci() for move in game.board_a.move_stack]) 
+    num_turns, res = game.run_self_play_game(random_agent.pick_move, max_moves=1000)
+    print(res)
+    assert num_turns < 1000
+    assert game.winner()[0]
+
+def test_run_self_play_game_with_mcts_agent():
+    game = BughouseGame()
+    num_turns, res = game.run_self_play_game(mcts.search, max_moves=200)
+
+    print([move.uci() for move in game.board_a.move_stack])
+    print([move.uci() for move in game.board_b.move_stack])
+    print("----------------------------")
+
+    print(res)
+    assert num_turns < 300
+    assert game.winner()[0]
+
     assert False
+
