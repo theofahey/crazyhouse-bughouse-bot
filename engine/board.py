@@ -1,15 +1,49 @@
-"""
-TODO (Day 1, task 2): override _push_capture on BughouseBoard so it adds to
-self.partner's pocket instead of self's own. Work out the destination color
-expression yourself before looking anything up -- given the diagonal
-pairing, and given that the base class's `self.pockets[self.turn]` is
-already known to resolve to "the color that just captured" (verified
-above), what expression on the PARTNER board gets you their pocket?
-"""
+
+import json
+import re
 
 from search import mcts
 import chess
 import chess.variant as variant
+import chess.pgn
+
+#For parsing pgn notation to moves.
+DROP_PATTERN = re.compile(r'^([PNBRQ]?)@([a-h][1-8])')
+DROP_PIECE_TYPES = {
+    "": chess.PAWN, "P": chess.PAWN, "N": chess.KNIGHT,
+    "B": chess.BISHOP, "R": chess.ROOK, "Q": chess.QUEEN,
+}
+PIECE_LETTERS = {
+    chess.QUEEN: "Q", chess.ROOK: "R", chess.BISHOP: "B",
+    chess.KNIGHT: "N", chess.PAWN: "P",
+}
+
+
+def resolve_move(board: "BughouseBoard", san: str) -> chess.Move:
+    """Turn a stored SAN token back into a Move, WITHOUT going through
+    chess.pgn's board-reconstruction machinery -- that builds a
+    disconnected, partner-less board from FEN/Variant headers alone, and
+    chokes the instant it hits a drop sourced from cross-board material
+    (i.e. most drops in a real bughouse game). Drops are fully
+    self-describing text (exact piece, exact square) -- no disambiguation
+    needed, so no reason parsing them should ever touch pocket state at
+    all. Ordinary moves go through board.parse_san(), which IS safe here:
+    disambiguation only depends on piece placement, never pockets, so
+    it's unaffected by the cross-board issue entirely."""
+    match = DROP_PATTERN.match(san)
+    if match:
+        letter, square_name = match.groups()
+        piece_type = DROP_PIECE_TYPES[letter]
+        square = chess.parse_square(square_name)
+        return chess.Move(square, square, drop=piece_type)
+    return board.parse_san(san)
+
+def pocket_text(board: "BughouseBoard", color: chess.Color) -> str:
+    pocket = board.pockets[color]
+    letters = []
+    for pt in (chess.QUEEN, chess.ROOK, chess.BISHOP, chess.KNIGHT, chess.PAWN):
+        letters.append(PIECE_LETTERS[pt] * pocket.count(pt))
+    return "".join(letters) or "\u2014"
 
 
 class BughouseBoard(variant.CrazyhouseBoard):
@@ -17,6 +51,9 @@ class BughouseBoard(variant.CrazyhouseBoard):
         super().__init__(*args, **kwargs)
         self.partner: "BughouseBoard | None" = None  # linked by BughouseGame
         self.position_counts = {} #For determining 3-fold repetition
+        self.roles = {chess.WHITE: "defender", chess.BLACK: "defender"}
+        self.san_log = []  # For converting games to pgn files
+
 
     def _push_capture(self, move, capture_square, piece_type, was_promoted):
         if was_promoted: 
@@ -32,6 +69,7 @@ class BughouseBoard(variant.CrazyhouseBoard):
     def copy(self, *, stack=True) -> "BughouseBoard":
         new_self = variant.CrazyhouseBoard.copy(self, stack=stack)
         new_self.position_counts = dict(self.position_counts)  #Copy Move History
+        new_self.roles = dict(self.roles)
         if self.partner is not None:
             # Call the PARENT's copy directly on partner, not partner.copy() --
             # that would recurse into this same override via partner's own
@@ -55,6 +93,8 @@ class BughouseBoard(variant.CrazyhouseBoard):
     def refresh_opportunity_score(self):
         pass
 
+    
+
 class BughouseGame:
     """Owns the two linked boards. Turn/clock coordination TBD -- see the
     open questions in the project notes before building this out further."""
@@ -64,6 +104,24 @@ class BughouseGame:
         self.board_b = BughouseBoard()
         self.board_a.partner = self.board_b
         self.board_b.partner = self.board_a
+
+    def assign_roles(self, team_a_roles=("attacker", "defender"), team_b_roles=("attacker", "defender")):
+        self.board_a_roles = {chess.WHITE: team_a_roles[0], chess.BLACK: team_b_roles[0]}
+        self.board_b_roles = {chess.WHITE: team_b_roles[1], chess.BLACK: team_b_roles[1]}
+
+    def on_move_made(self, board: BughouseBoard, move: chess.Move) -> None:
+        san_body = board._algebraic_without_suffix(move) 
+        if move.drop == chess.PAWN:
+            san_body = "P" + san_body
+        board.push_tracked(move)
+        if board.is_checkmate():
+            san = san_body + "#"
+        elif board.is_check():
+            san = san_body + '+'
+        else:
+            san = san_body
+        board.san_log.append(san)
+        board.refresh_opportunity_score()
 
     def winner(self) -> tuple[bool, str | None]: 
         """
@@ -89,11 +147,70 @@ class BughouseGame:
                     return "UNKNOWN RESULT"
 
         return (False, None)
-
-    def on_move_made(self, board: BughouseBoard, move: chess.Move) -> None:
-        board.push_tracked(move)
-        board.refresh_opportunity_score()
     
+    def export_pgn_text(self, match_id: str = "game1") -> tuple[str, str]:
+        """Hand-rolled, not chess.pgn -- that machinery reconstructs a
+        disconnected board from headers alone and can't replay bughouse
+        history correctly. See project notes."""
+        result = "*"
+        def render(board: "BughouseBoard", label: str) -> str:
+            header = f'[Event "Bughouse match {match_id}"]\n[Board "{label}"]\n'f'[Variant "Crazyhouse"]\n'
+            f'[Result "{result}"]\n\n'
+            moves = []
+            for i, san in enumerate(board.san_log):
+                if i % 2 == 0:
+                    moves.append(f"{i // 2 + 1}.{san}")
+                else:
+                    moves.append(san)
+            return header + " ".join(moves) + f" {result}"
+
+        return render(self.board_a, "A"), render(self.board_b, "B")
+
+    def save_game_logs(self, path: str) -> None:
+        with open(path, "w") as f:
+            json.dump({"a": self.board_a.san_log, "b": self.board_b.san_log}, f)
+
+    @staticmethod
+    def load_game_logs(path: str) -> tuple[list, list]:
+        with open(path) as f:
+            data = json.load(f)
+        return data["a"], data["b"]
+
+    def replay_with_frames(self, san_log_a: list, san_log_b: list) -> list:
+        """Replay two stored per-board SAN logs, in true alternating ply
+        order, through THIS game's own linked boards -- not chess.pgn's
+        board reconstruction. Assumes self.board_a/board_b are freshly
+        constructed (no moves played yet). Returns one frame per ply for
+        a step-through GUI. Only the SVG of the board that actually moved
+        is included per frame (halves the embedded image data versus
+        capturing both boards every step); pockets are always included
+        for all four seats, since a capture on either board can change
+        either board's pocket via cross-board routing."""
+        boards = [self.board_a, self.board_b]
+        logs = [iter(san_log_a), iter(san_log_b)]
+        total_plies = len(san_log_a) + len(san_log_b)
+
+        frames = []
+        for i in range(total_plies):
+            label = "A" if i % 2 == 0 else "B"
+            board = boards[i % 2]
+            san = next(logs[i % 2])
+            move = resolve_move(board, san)
+            self.on_move_made(board, move)
+
+            frames.append({
+                "ply": i,
+                "board": label,
+                "san": board.san_log[-1],
+                "svg": chess.svg.board(board, size=360),
+                "pockets": {
+                    "a_w": pocket_text(self.board_a, chess.WHITE),
+                    "a_b": pocket_text(self.board_a, chess.BLACK),
+                    "b_w": pocket_text(self.board_b, chess.WHITE),
+                    "b_b": pocket_text(self.board_b, chess.BLACK),
+                },
+            })
+        return frames
 
     def run_self_play_game(self, move: chess.Move, max_moves: int = 500) -> int:
         boards = [self.board_a, self.board_b]

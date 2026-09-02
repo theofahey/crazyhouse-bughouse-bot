@@ -82,9 +82,6 @@ def search(root_board, iterations: int = 300):
     """Run MCTS from root_board, return the move with the most visits
     (not highest raw value -- visit count reflects how much the search
     actually trusts a branch, which is the more robust choice at the end).
-    TODO: the four phases -- select via ucb1 down to an expandable/terminal
-    node, expand one untried move if any, evaluate the new leaf via
-    _leaf_value, backpropagate with the sign flip at each level.
     """
     root = MCTSNode(root_board.copy())
     for i in range(iterations):
@@ -96,3 +93,4 @@ def search(root_board, iterations: int = 300):
 
     best_child = max(root.children, key=lambda c: c.visits)
     return best_child.move
+

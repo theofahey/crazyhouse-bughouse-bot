@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Bughouse Replay</title>
+<style>
+  :root {
+    --bg: #14171c;
+    --panel: #1b1f27;
+    --border: #2a3040;
+    --text: #e7e4dd;
+    --text-dim: #8b93a1;
+    --accent: #d9a441;
+    --accent-dim: #6b5527;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+    padding: 28px 32px 40px;
+  }
+  h1 {
+    font-size: 20px;
+    font-weight: 600;
+    margin: 0 0 4px;
+  }
+  .subtitle { color: var(--text-dim); font-size: 14px; margin-bottom: 20px; }
+
+  select {
+    background: var(--panel);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 6px 10px;
+    font-size: 14px;
+  }
+
+  .layout {
+    display: flex;
+    gap: 24px;
+    margin-top: 20px;
+    flex-wrap: wrap;
+  }
+
+  .boards {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+  }
+
+  .board-panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 14px;
+    width: 388px;
+  }
+
+  .board-label {
+    font-size: 13px;
+    color: var(--text-dim);
+    margin-bottom: 8px;
+    display: flex;
+    justify-content: space-between;
+  }
+  .board-label .active-tag {
+    color: var(--accent);
+    display: none;
+  }
+  .board-label.moved .active-tag { display: inline; }
+
+  .pocket {
+    font-family: "SF Mono", Consolas, monospace;
+    font-size: 15px;
+    letter-spacing: 2px;
+    padding: 4px 2px;
+    color: var(--text-dim);
+    min-height: 20px;
+  }
+  .pocket.white-pocket { color: #d8d4c8; }
+  .pocket.black-pocket { color: #9098a8; }
+
+  .board-svg { line-height: 0; }
+  .board-svg svg { width: 100%; height: auto; display: block; }
+
+  .side-panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 16px;
+    width: 260px;
+    max-height: 780px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .outcome {
+    font-size: 14px;
+    padding: 10px 12px;
+    border-radius: 4px;
+    background: rgba(217, 164, 65, 0.1);
+    border: 1px solid var(--accent-dim);
+    margin-bottom: 14px;
+    display: none;
+  }
+  .outcome.show { display: block; }
+
+  .move-list {
+    overflow-y: auto;
+    flex: 1;
+    font-size: 14px;
+  }
+  .move-row {
+    display: grid;
+    grid-template-columns: 32px 1fr 1fr;
+    gap: 6px;
+    padding: 3px 6px;
+    border-radius: 3px;
+    cursor: pointer;
+    color: var(--text-dim);
+  }
+  .move-row:hover { background: rgba(255,255,255,0.04); }
+  .move-row.current { background: rgba(217, 164, 65, 0.18); color: var(--text); }
+  .move-row .board-tag {
+    font-size: 11px;
+    color: var(--text-dim);
+    align-self: center;
+  }
+
+  .controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 16px;
+  }
+  .controls button {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 4px;
+    padding: 6px 12px;
+    font-size: 14px;
+    cursor: pointer;
+  }
+  .controls button:hover:not(:disabled) { border-color: var(--accent-dim); }
+  .controls button:disabled { opacity: 0.35; cursor: default; }
+  .ply-counter { color: var(--text-dim); font-size: 13px; min-width: 90px; }
+</style>
+</head>
+<body>
+
+<h1>Bughouse Replay</h1>
+<div class="subtitle">Step through a saved game, move by move, in true chronological order.</div>
+
+<select id="game-select"><option value="">Select a saved game&hellip;</option></select>
+
+<div class="layout">
+  <div class="boards">
+    <div class="board-panel">
+      <div class="board-label" id="label-a">Board A <span class="active-tag">&#9679; just moved</span></div>
+      <div class="pocket black-pocket" id="pocket-a-black"></div>
+      <div class="board-svg" id="svg-a"></div>
+      <div class="pocket white-pocket" id="pocket-a-white"></div>
+    </div>
+    <div class="board-panel">
+      <div class="board-label" id="label-b">Board B <span class="active-tag">&#9679; just moved</span></div>
+      <div class="pocket black-pocket" id="pocket-b-black"></div>
+      <div class="board-svg" id="svg-b"></div>
+      <div class="pocket white-pocket" id="pocket-b-white"></div>
+    </div>
+  </div>
+
+  <div class="side-panel">
+    <div class="outcome" id="outcome"></div>
+    <div class="move-list" id="move-list"></div>
+  </div>
+</div>
+
+<div class="controls">
+  <button id="btn-first" title="Start">&#8676;</button>
+  <button id="btn-prev" title="Previous">&#8592;</button>
+  <span class="ply-counter" id="ply-counter">&mdash;</span>
+  <button id="btn-next" title="Next">&#8594;</button>
+  <button id="btn-last" title="End">&#8677;</button>
+</div>
+
+<script>
+const API_BASE = "http://localhost:8000";
+
+let gameData = null;
+let currentPly = -1; // -1 = starting position, before any move
+
+const els = {
+  select: document.getElementById("game-select"),
+  svgA: document.getElementById("svg-a"),
+  svgB: document.getElementById("svg-b"),
+  labelA: document.getElementById("label-a"),
+  labelB: document.getElementById("label-b"),
+  pocketAW: document.getElementById("pocket-a-white"),
+  pocketAB: document.getElementById("pocket-a-black"),
+  pocketBW: document.getElementById("pocket-b-white"),
+  pocketBB: document.getElementById("pocket-b-black"),
+  moveList: document.getElementById("move-list"),
+  outcome: document.getElementById("outcome"),
+  plyCounter: document.getElementById("ply-counter"),
+  btnFirst: document.getElementById("btn-first"),
+  btnPrev: document.getElementById("btn-prev"),
+  btnNext: document.getElementById("btn-next"),
+  btnLast: document.getElementById("btn-last"),
+};
+
+async function loadGameList() {
+  const res = await fetch(`${API_BASE}/games`);
+  const data = await res.json();
+  for (const id of data.games) {
+    const opt = document.createElement("option");
+    opt.value = id;
+    opt.textContent = id;
+    els.select.appendChild(opt);
+  }
+}
+
+async function loadGame(gameId) {
+  const res = await fetch(`${API_BASE}/games/${gameId}/frames`);
+  if (!res.ok) {
+    alert(`Couldn't load "${gameId}": ${res.status}`);
+    return;
+  }
+  gameData = await res.json();
+  currentPly = -1;
+  buildMoveList();
+  renderOutcome();
+  renderPly();
+}
+
+function buildMoveList() {
+  els.moveList.innerHTML = "";
+  gameData.frames.forEach((frame, i) => {
+    const row = document.createElement("div");
+    row.className = "move-row";
+    row.dataset.ply = i;
+    row.innerHTML = `
+      <span>${i + 1}.</span>
+      <span class="board-tag">${frame.board}</span>
+      <span>${frame.san}</span>
+    `;
+    row.onclick = () => { currentPly = i; renderPly(); };
+    els.moveList.appendChild(row);
+  });
+}
+
+function renderOutcome() {
+  const o = gameData.outcome;
+  if (o.status === "in_progress") {
+    els.outcome.classList.remove("show");
+    return;
+  }
+  let text = "";
+  if (o.status === "checkmate") {
+    text = `Checkmate on Board ${o.board} \u2014 ${o.winner_color} wins`;
+  } else if (o.status === "draw") {
+    text = `Draw \u2014 ${o.reason}`;
+  }
+  els.outcome.textContent = text;
+  els.outcome.classList.add("show");
+}
+
+function renderPly() {
+  if (!gameData) return;
+
+  // Determine the most recent SVG for each board at this point in time,
+  // since a frame only carries the SVG of whichever board just moved.
+  let svgA = gameData.start_svg, svgB = gameData.start_svg;
+  let movedThisPly = null;
+  for (let i = 0; i <= currentPly; i++) {
+    const f = gameData.frames[i];
+    if (f.board === "A") svgA = f.svg; else svgB = f.svg;
+    if (i === currentPly) movedThisPly = f.board;
+  }
+  els.svgA.innerHTML = svgA;
+  els.svgB.innerHTML = svgB;
+  els.labelA.classList.toggle("moved", movedThisPly === "A");
+  els.labelB.classList.toggle("moved", movedThisPly === "B");
+
+  // Pockets: read straight from the current frame (always present for
+  // all four seats), or the empty starting state before any move.
+  const pockets = currentPly >= 0
+    ? gameData.frames[currentPly].pockets
+    : { a_w: "\u2014", a_b: "\u2014", b_w: "\u2014", b_b: "\u2014" };
+  els.pocketAW.textContent = pockets.a_w;
+  els.pocketAB.textContent = pockets.a_b;
+  els.pocketBW.textContent = pockets.b_w;
+  els.pocketBB.textContent = pockets.b_b;
+
+  document.querySelectorAll(".move-row").forEach(row => {
+    row.classList.toggle("current", Number(row.dataset.ply) === currentPly);
+  });
+  if (currentPly >= 0) {
+    document.querySelector(`.move-row[data-ply="${currentPly}"]`)
+      ?.scrollIntoView({ block: "nearest" });
+  }
+
+  els.plyCounter.textContent = currentPly < 0
+    ? "Start"
+    : `Move ${currentPly + 1} of ${gameData.frame_count}`;
+  els.btnFirst.disabled = els.btnPrev.disabled = currentPly < 0;
+  els.btnLast.disabled = els.btnNext.disabled = currentPly >= gameData.frame_count - 1;
+}
+
+els.select.onchange = () => { if (els.select.value) loadGame(els.select.value); };
+els.btnFirst.onclick = () => { currentPly = -1; renderPly(); };
+els.btnPrev.onclick = () => { currentPly = Math.max(-1, currentPly - 1); renderPly(); };
+els.btnNext.onclick = () => { currentPly = Math.min(gameData.frame_count - 1, currentPly + 1); renderPly(); };
+els.btnLast.onclick = () => { currentPly = gameData.frame_count - 1; renderPly(); };
+document.addEventListener("keydown", (e) => {
+  if (!gameData) return;
+  if (e.key === "ArrowLeft") els.btnPrev.onclick();
+  if (e.key === "ArrowRight") els.btnNext.onclick();
+});
+
+loadGameList();
+</script>
+</body>
+</html>

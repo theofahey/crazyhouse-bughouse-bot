@@ -10,6 +10,7 @@ from engine.board import BughouseGame
 import search.random_agent as random_agent
 import search.mcts as mcts
 
+TOTAL_NON_KING_PIECES = 60
 
 
 def test_capture_goes_to_partners_pocket_not_own():
@@ -70,6 +71,40 @@ def test_promoted_piece_still_reverts_to_pawn_when_routed_to_partner():
     assert len(board_b.pockets[0]) == 1
     assert board_b.pockets[0].count(chess.PAWN) == 1
 
+def _non_king_piece_count(game: BughouseGame) -> int:
+    """Total non-king pieces across both boards AND both pockets on each
+    board. Should be an invariant -- nothing in bughouse ever creates or
+    destroys a piece, only moves it between board and pocket, or changes
+    its owning color/type. If this ever isn't 60, something in the
+    capture/drop/routing pipeline dropped or duplicated a piece."""
+    total = 0
+    for board in (game.board_a, game.board_b):
+        total += chess.popcount(board.occupied & ~board.kings)
+        total += len(board.pockets[chess.WHITE])
+        total += len(board.pockets[chess.BLACK])
+    return total
+
+
+def test_material_conserved_throughout_random_game():
+    """Stronger than the test above: checks the conservation invariant
+    after every single move, not just at the end, so a failure points at
+    roughly which move introduced the bug rather than just 'somewhere'."""
+    game = BughouseGame()
+    boards = [game.board_a, game.board_b]
+
+    assert _non_king_piece_count(game) == TOTAL_NON_KING_PIECES
+
+    moves_played = 0
+    while not game.winner()[0] and moves_played < 300:
+        board = boards[moves_played % 2]
+        move = random_agent.pick_move(board)
+        game.on_move_made(board, move)
+        moves_played += 1
+
+        assert _non_king_piece_count(game) == TOTAL_NON_KING_PIECES, (
+            f"piece count invariant broken after move {moves_played}"
+        )
+
 def test_run_self_play_game_with_random_agent():
     # Will run a round of self play chess with a max steps value of 3,000.
     # Will test to ensure the game reaches an end state, and max_steps hasn't been reached. 
@@ -82,6 +117,7 @@ def test_run_self_play_game_with_random_agent():
 
 def test_run_self_play_game_with_mcts_agent():
     game = BughouseGame()
+    game.assign_roles()
     num_turns, res = game.run_self_play_game(mcts.search, max_moves=200)
 
     print([move.uci() for move in game.board_a.move_stack])
@@ -89,8 +125,11 @@ def test_run_self_play_game_with_mcts_agent():
     print("----------------------------")
 
     print(res)
+
     assert num_turns < 300
     assert game.winner()[0]
+
+    game.save_game_logs("saved_games/game_1.json")
 
     assert False
 

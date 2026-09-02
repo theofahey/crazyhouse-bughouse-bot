@@ -1,0 +1,4 @@
+[Event "Bughouse match game1"]
+[Board "B"]
+[Variant "Crazyhouse"]
+1.a4 a5 2.b4 axb4 3.P@a7 Rxa7 4.P@h6 gxh6 5.P@f6 exf6 6.P@d6 cxd6 7.P@c6 bxc6 8.P@g7 Bxg7 9.P@e7 Qxe7 10.P@c7 Rxa4 11.cxb8=R Rxa1 12.Rxc8+ Qd8 13.Rxd8+ Kxd8 14.P@e7+ Nxe7 15.P@c7+ Kxc7 16.R@c8+ Rxc8 17.P@b6+ Kxb6 18.R@h8 R@g8 19.P@c5+ dxc5 20.Rxg8 Q@h8 21.Rxc8 B@g8 22.Rxc6+ dxc6 23.P@a5+ Rxa5 24.R@b7+ Kxb7 25.c4 R@f8 26.R@c7+ Kxc7 27.P@d6+ Kxd6 28.R@d7+ Kxd7 29.R@c7+ Kxc7 30.R@d7+ Kxd7 31.R@c7+ Kxc7 32.R@d7+ *
