@@ -30,29 +30,6 @@ KING_ZONE_WEIGHTS = {
 
 VULNERABILITY_MARGIN = 1 
 
-def evaluate(board) -> float:
-    """Return material balance from the CURRENT PLAYER TO MOVE's
-    perspective (not always White's) -- positive favors board.turn.
-    Include pocket pieces, not just pieces on the board -- a piece in
-    hand is still yours, it just hasn't been placed yet.
-    """
-
-    current_turn = board.turn #True if white, False if black
-
-    if current_turn:
-      player = chess.WHITE
-    else:
-      player = chess.BLACK
-  
-    own_danger = _king_vulnerability(board, board.turn)
-    opp_danger = _king_vulnerability(board, not board.turn)
-
-    if board.roles[board.turn] == "defender":
-      king_term = -1.5 * own_danger - 0.3 * opp_danger
-    else:  # attacker
-      king_term = -0.5 * own_danger - 1.5 * opp_danger
-    return(score_pieces(board, player) + king_term)
-
 def _is_diagonal(king_square: chess.Square, other_square: chess.Square) -> bool:
     file_diff = abs(chess.square_file(king_square) - chess.square_file(other_square))
     rank_diff = abs(chess.square_rank(king_square) - chess.square_rank(other_square))
@@ -116,12 +93,38 @@ def score_pieces(board, player) -> float:
       opponent_points += PIECE_VALUES[chess.piece_name(piece.piece_type)]
   
   for piece_type in chess.PIECE_TYPES:
-    count = board.pockets[player-1].count(piece_type)
+    count = board.pockets[player].count(piece_type)
     if count > 0:
-        current_points += PIECE_VALUES[chess.piece_name(piece_type)]
-    opponent_count = board.pockets[player].count(piece_type)
+        current_points += PIECE_VALUES[chess.piece_name(piece_type)] * count
+    opponent_count = board.pockets[not player].count(piece_type)
     if opponent_count > 0:
-      opponent_points += PIECE_VALUES[chess.piece_name(piece_type)]
+      opponent_points += PIECE_VALUES[chess.piece_name(piece_type)] * opponent_count
     
   return current_points-opponent_points
+
+def evaluate(board) -> float:
+    """Return material balance from the CURRENT PLAYER TO MOVE's
+    perspective (not always White's) -- positive favors board.turn.
+    Include pocket pieces, not just pieces on the board -- a piece in
+    hand is still yours, it just hasn't been placed yet.
+    """
+
+    current_turn = board.turn #True if white, False if black
+
+    if current_turn:
+      player = chess.WHITE
+    else:
+      player = chess.BLACK
+  
+    own_danger = _king_vulnerability(board, board.turn)
+    opp_danger = _king_vulnerability(board, not board.turn)
+
+    # own_danger hurts us, opp_danger helps us. A defender mostly wants its
+    # own king safe; an attacker mostly wants the enemy king exposed.
+    if board.roles[board.turn] == "defender":
+      king_term = -1.5 * own_danger + 0.3 * opp_danger
+    else:  # attacker
+      king_term = -0.5 * own_danger + 1.5 * opp_danger
+    return(score_pieces(board, player) + king_term)
+
         

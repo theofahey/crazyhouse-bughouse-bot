@@ -1,326 +1,416 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-<meta charset="utf-8">
-<title>Bughouse Replay</title>
-<style>
-  :root {
-    --bg: #14171c;
-    --panel: #1b1f27;
-    --border: #2a3040;
-    --text: #e7e4dd;
-    --text-dim: #8b93a1;
-    --accent: #d9a441;
-    --accent-dim: #6b5527;
-  }
-  * { box-sizing: border-box; }
-  body {
-    margin: 0;
-    background: var(--bg);
-    color: var(--text);
-    font-family: -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
-    padding: 28px 32px 40px;
-  }
-  h1 {
-    font-size: 20px;
-    font-weight: 600;
-    margin: 0 0 4px;
-  }
-  .subtitle { color: var(--text-dim); font-size: 14px; margin-bottom: 20px; }
+  <meta charset="utf-8">
+  <title>Bughouse Replay</title>
+  <style>
+    :root {
+      --bg: #14171c;
+      --panel: #1b1f27;
+      --border: #2a3040;
+      --text: #e7e4dd;
+      --text-dim: #8b93a1;
+      --accent: #d9a441;
+      --accent-dim: #6b5527;
+    }
 
-  select {
-    background: var(--panel);
-    color: var(--text);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    padding: 6px 10px;
-    font-size: 14px;
-  }
+    * {
+      box-sizing: border-box;
+    }
 
-  .layout {
-    display: flex;
-    gap: 24px;
-    margin-top: 20px;
-    flex-wrap: wrap;
-  }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+      padding: 24px 32px 40px;
+    }
 
-  .boards {
-    display: flex;
-    gap: 20px;
-    flex-wrap: wrap;
-  }
+    h1 {
+      font-size: 20px;
+      font-weight: 600;
+      margin: 0 0 4px;
+    }
 
-  .board-panel {
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 14px;
-    width: 388px;
-  }
+    .subtitle {
+      color: var(--text-dim);
+      font-size: 14px;
+      margin-bottom: 18px;
+    }
 
-  .board-label {
-    font-size: 13px;
-    color: var(--text-dim);
-    margin-bottom: 8px;
-    display: flex;
-    justify-content: space-between;
-  }
-  .board-label .active-tag {
-    color: var(--accent);
-    display: none;
-  }
-  .board-label.moved .active-tag { display: inline; }
+    select {
+      background: var(--panel);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 6px 10px;
+      font-size: 14px;
+    }
 
-  .pocket {
-    font-family: "SF Mono", Consolas, monospace;
-    font-size: 15px;
-    letter-spacing: 2px;
-    padding: 4px 2px;
-    color: var(--text-dim);
-    min-height: 20px;
-  }
-  .pocket.white-pocket { color: #d8d4c8; }
-  .pocket.black-pocket { color: #9098a8; }
+    .stepper {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 18px;
+      margin: 22px 0 8px;
+    }
 
-  .board-svg { line-height: 0; }
-  .board-svg svg { width: 100%; height: auto; display: block; }
+    .stepper button {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 8px;
+      width: 52px;
+      height: 52px;
+      font-size: 22px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
 
-  .side-panel {
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 16px;
-    width: 260px;
-    max-height: 780px;
-    display: flex;
-    flex-direction: column;
-  }
+    .stepper button:hover:not(:disabled) {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
 
-  .outcome {
-    font-size: 14px;
-    padding: 10px 12px;
-    border-radius: 4px;
-    background: rgba(217, 164, 65, 0.1);
-    border: 1px solid var(--accent-dim);
-    margin-bottom: 14px;
-    display: none;
-  }
-  .outcome.show { display: block; }
+    .stepper button:disabled {
+      opacity: 0.3;
+      cursor: default;
+    }
 
-  .move-list {
-    overflow-y: auto;
-    flex: 1;
-    font-size: 14px;
-  }
-  .move-row {
-    display: grid;
-    grid-template-columns: 32px 1fr 1fr;
-    gap: 6px;
-    padding: 3px 6px;
-    border-radius: 3px;
-    cursor: pointer;
-    color: var(--text-dim);
-  }
-  .move-row:hover { background: rgba(255,255,255,0.04); }
-  .move-row.current { background: rgba(217, 164, 65, 0.18); color: var(--text); }
-  .move-row .board-tag {
-    font-size: 11px;
-    color: var(--text-dim);
-    align-self: center;
-  }
+    .stepper .ply-counter {
+      color: var(--text-dim);
+      font-size: 16px;
+      min-width: 150px;
+      text-align: center;
+    }
 
-  .controls {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-top: 16px;
-  }
-  .controls button {
-    background: var(--panel);
-    border: 1px solid var(--border);
-    color: var(--text);
-    border-radius: 4px;
-    padding: 6px 12px;
-    font-size: 14px;
-    cursor: pointer;
-  }
-  .controls button:hover:not(:disabled) { border-color: var(--accent-dim); }
-  .controls button:disabled { opacity: 0.35; cursor: default; }
-  .ply-counter { color: var(--text-dim); font-size: 13px; min-width: 90px; }
-</style>
+    .outcome {
+      text-align: center;
+      font-size: 14px;
+      padding: 8px 14px;
+      border-radius: 4px;
+      background: rgba(217, 164, 65, 0.1);
+      border: 1px solid var(--accent-dim);
+      margin: 0 auto 20px;
+      max-width: 420px;
+      display: none;
+    }
+
+    .outcome.show {
+      display: block;
+    }
+
+    .layout {
+      display: flex;
+      justify-content: center;
+      gap: 18px;
+      flex-wrap: wrap;
+      align-items: flex-start;
+    }
+
+    .move-table-panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px 8px;
+      width: 190px;
+      max-height: 640px;
+      overflow-y: auto;
+    }
+
+    .move-table-panel .heading {
+      font-size: 12px;
+      color: var(--text-dim);
+      text-align: center;
+      margin-bottom: 6px;
+    }
+
+    table.move-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+
+    table.move-table td {
+      padding: 3px 6px;
+      cursor: pointer;
+      border-radius: 3px;
+      color: var(--text-dim);
+    }
+
+    table.move-table td.num {
+      color: var(--text-dim);
+      cursor: default;
+      width: 22px;
+      text-align: right;
+      font-size: 12px;
+    }
+
+    table.move-table td:hover:not(.num):not(.empty) {
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    table.move-table td.current {
+      background: rgba(217, 164, 65, 0.2);
+      color: var(--text);
+      font-weight: 600;
+    }
+
+    table.move-table td.empty {
+      cursor: default;
+    }
+
+    .board-panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 14px;
+      width: 388px;
+    }
+
+    .board-label {
+      font-size: 13px;
+      color: var(--text-dim);
+      margin-bottom: 8px;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .board-label .active-tag {
+      color: var(--accent);
+      display: none;
+    }
+
+    .board-label.moved .active-tag {
+      display: inline;
+    }
+
+    .pocket {
+      font-family: "SF Mono", Consolas, monospace;
+      font-size: 15px;
+      letter-spacing: 2px;
+      padding: 4px 2px;
+      color: var(--text-dim);
+      min-height: 20px;
+    }
+
+    .pocket.white-pocket {
+      color: #d8d4c8;
+    }
+
+    .pocket.black-pocket {
+      color: #9098a8;
+    }
+
+    .board-svg {
+      line-height: 0;
+    }
+
+    .board-svg svg {
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+  </style>
 </head>
+
 <body>
 
-<h1>Bughouse Replay</h1>
-<div class="subtitle">Step through a saved game, move by move, in true chronological order.</div>
+  <h1>Bughouse Replay</h1>
+  <div class="subtitle">Step through a saved game, move by move, in true chronological order.</div>
 
-<select id="game-select"><option value="">Select a saved game&hellip;</option></select>
+  <select id="game-select">
+    <option value="">Select a saved game&hellip;</option>
+  </select>
 
-<div class="layout">
-  <div class="boards">
+  <div class="stepper">
+    <button id="btn-first" title="Start">&#8676;</button>
+    <button id="btn-prev" title="Previous">&#8592;</button>
+    <span class="ply-counter" id="ply-counter">&mdash;</span>
+    <button id="btn-next" title="Next">&#8594;</button>
+    <button id="btn-last" title="End">&#8677;</button>
+  </div>
+
+  <div class="outcome" id="outcome"></div>
+
+  <div class="layout">
+    <div class="move-table-panel">
+      <div class="heading">Board A moves</div>
+      <table class="move-table" id="moves-a"></table>
+    </div>
+
     <div class="board-panel">
       <div class="board-label" id="label-a">Board A <span class="active-tag">&#9679; just moved</span></div>
       <div class="pocket black-pocket" id="pocket-a-black"></div>
       <div class="board-svg" id="svg-a"></div>
       <div class="pocket white-pocket" id="pocket-a-white"></div>
     </div>
+
     <div class="board-panel">
       <div class="board-label" id="label-b">Board B <span class="active-tag">&#9679; just moved</span></div>
-      <div class="pocket black-pocket" id="pocket-b-black"></div>
-      <div class="board-svg" id="svg-b"></div>
       <div class="pocket white-pocket" id="pocket-b-white"></div>
+      <div class="board-svg" id="svg-b"></div>
+      <div class="pocket black-pocket" id="pocket-b-black"></div>
+    </div>
+
+    <div class="move-table-panel">
+      <div class="heading">Board B moves</div>
+      <table class="move-table" id="moves-b"></table>
     </div>
   </div>
 
-  <div class="side-panel">
-    <div class="outcome" id="outcome"></div>
-    <div class="move-list" id="move-list"></div>
-  </div>
-</div>
+  <script>
+    const API_BASE = "http://localhost:8000";
 
-<div class="controls">
-  <button id="btn-first" title="Start">&#8676;</button>
-  <button id="btn-prev" title="Previous">&#8592;</button>
-  <span class="ply-counter" id="ply-counter">&mdash;</span>
-  <button id="btn-next" title="Next">&#8594;</button>
-  <button id="btn-last" title="End">&#8677;</button>
-</div>
+    let gameData = null;
+    let currentPly = -1;
+    let sanLogA = [], sanLogB = [];
 
-<script>
-const API_BASE = "http://localhost:8000";
+    const els = {
+      select: document.getElementById("game-select"),
+      svgA: document.getElementById("svg-a"),
+      svgB: document.getElementById("svg-b"),
+      labelA: document.getElementById("label-a"),
+      labelB: document.getElementById("label-b"),
+      pocketAW: document.getElementById("pocket-a-white"),
+      pocketAB: document.getElementById("pocket-a-black"),
+      pocketBW: document.getElementById("pocket-b-white"),
+      pocketBB: document.getElementById("pocket-b-black"),
+      movesA: document.getElementById("moves-a"),
+      movesB: document.getElementById("moves-b"),
+      outcome: document.getElementById("outcome"),
+      plyCounter: document.getElementById("ply-counter"),
+      btnFirst: document.getElementById("btn-first"),
+      btnPrev: document.getElementById("btn-prev"),
+      btnNext: document.getElementById("btn-next"),
+      btnLast: document.getElementById("btn-last"),
+    };
 
-let gameData = null;
-let currentPly = -1; // -1 = starting position, before any move
+    async function loadGameList() {
+      const res = await fetch(`${API_BASE}/games`);
+      const data = await res.json();
+      for (const id of data.games) {
+        const opt = document.createElement("option");
+        opt.value = id;
+        opt.textContent = id;
+        els.select.appendChild(opt);
+      }
+    }
 
-const els = {
-  select: document.getElementById("game-select"),
-  svgA: document.getElementById("svg-a"),
-  svgB: document.getElementById("svg-b"),
-  labelA: document.getElementById("label-a"),
-  labelB: document.getElementById("label-b"),
-  pocketAW: document.getElementById("pocket-a-white"),
-  pocketAB: document.getElementById("pocket-a-black"),
-  pocketBW: document.getElementById("pocket-b-white"),
-  pocketBB: document.getElementById("pocket-b-black"),
-  moveList: document.getElementById("move-list"),
-  outcome: document.getElementById("outcome"),
-  plyCounter: document.getElementById("ply-counter"),
-  btnFirst: document.getElementById("btn-first"),
-  btnPrev: document.getElementById("btn-prev"),
-  btnNext: document.getElementById("btn-next"),
-  btnLast: document.getElementById("btn-last"),
-};
+    async function loadGame(gameId) {
+      const res = await fetch(`${API_BASE}/games/${gameId}/frames`);
+      if (!res.ok) {
+        alert(`Couldn't load "${gameId}": ${res.status}`);
+        return;
+      }
+      gameData = await res.json();
+      sanLogA = gameData.frames.filter(f => f.board === "A").map(f => f.san);
+      sanLogB = gameData.frames.filter(f => f.board === "B").map(f => f.san);
+      currentPly = -1;
+      renderOutcome();
+      renderPly();
+    }
 
-async function loadGameList() {
-  const res = await fetch(`${API_BASE}/games`);
-  const data = await res.json();
-  for (const id of data.games) {
-    const opt = document.createElement("option");
-    opt.value = id;
-    opt.textContent = id;
-    els.select.appendChild(opt);
-  }
-}
+    function renderOutcome() {
+      const o = gameData.outcome;
+      if (o.status === "in_progress") {
+        els.outcome.classList.remove("show");
+        return;
+      }
+      let text = "";
+      if (o.status === "checkmate") {
+        text = `Checkmate on Board ${o.board} \u2014 ${o.winner_color} wins`;
+      } else if (o.status === "draw") {
+        text = `Draw \u2014 ${o.reason}`;
+      }
+      els.outcome.textContent = text;
+      els.outcome.classList.add("show");
+    }
 
-async function loadGame(gameId) {
-  const res = await fetch(`${API_BASE}/games/${gameId}/frames`);
-  if (!res.ok) {
-    alert(`Couldn't load "${gameId}": ${res.status}`);
-    return;
-  }
-  gameData = await res.json();
-  currentPly = -1;
-  buildMoveList();
-  renderOutcome();
-  renderPly();
-}
+    function revealedCounts(ply) {
+      if (ply < 0) return [0, 0];
+      const countA = Math.floor(ply / 2) + 1;
+      const countB = ply >= 1 ? Math.floor((ply - 1) / 2) + 1 : 0;
+      return [countA, countB];
+    }
 
-function buildMoveList() {
-  els.moveList.innerHTML = "";
-  gameData.frames.forEach((frame, i) => {
-    const row = document.createElement("div");
-    row.className = "move-row";
-    row.dataset.ply = i;
-    row.innerHTML = `
-      <span>${i + 1}.</span>
-      <span class="board-tag">${frame.board}</span>
-      <span>${frame.san}</span>
-    `;
-    row.onclick = () => { currentPly = i; renderPly(); };
-    els.moveList.appendChild(row);
-  });
-}
+    function globalPlyForLocal(board, j) {
+      return board === "A" ? j * 2 : j * 2 + 1;
+    }
 
-function renderOutcome() {
-  const o = gameData.outcome;
-  if (o.status === "in_progress") {
-    els.outcome.classList.remove("show");
-    return;
-  }
-  let text = "";
-  if (o.status === "checkmate") {
-    text = `Checkmate on Board ${o.board} \u2014 ${o.winner_color} wins`;
-  } else if (o.status === "draw") {
-    text = `Draw \u2014 ${o.reason}`;
-  }
-  els.outcome.textContent = text;
-  els.outcome.classList.add("show");
-}
+    function buildMoveTable(tableEl, sanLog, revealedCount, boardLabel, highlightGlobalPly) {
+      tableEl.innerHTML = "";
+      for (let row = 0; row < Math.ceil(sanLog.length / 2); row++) {
+        const whiteIdx = row * 2, blackIdx = row * 2 + 1;
+        const tr = document.createElement("tr");
 
-function renderPly() {
-  if (!gameData) return;
+        const numTd = document.createElement("td");
+        numTd.className = "num";
+        numTd.textContent = (row + 1) + ".";
+        tr.appendChild(numTd);
 
-  // Determine the most recent SVG for each board at this point in time,
-  // since a frame only carries the SVG of whichever board just moved.
-  let svgA = gameData.start_svg, svgB = gameData.start_svg;
-  let movedThisPly = null;
-  for (let i = 0; i <= currentPly; i++) {
-    const f = gameData.frames[i];
-    if (f.board === "A") svgA = f.svg; else svgB = f.svg;
-    if (i === currentPly) movedThisPly = f.board;
-  }
-  els.svgA.innerHTML = svgA;
-  els.svgB.innerHTML = svgB;
-  els.labelA.classList.toggle("moved", movedThisPly === "A");
-  els.labelB.classList.toggle("moved", movedThisPly === "B");
+        for (const idx of [whiteIdx, blackIdx]) {
+          const td = document.createElement("td");
+          td.textContent = sanLog[idx];
+          const gPly = globalPlyForLocal(boardLabel, idx);
+          if (gPly === highlightGlobalPly) td.classList.add("current");
+          td.onclick = () => { currentPly = gPly - 1; renderPly(); currentPly = gPly; renderPly()};
+          tr.appendChild(td);
+        }
+        tableEl.appendChild(tr);
+      }
+    }
 
-  // Pockets: read straight from the current frame (always present for
-  // all four seats), or the empty starting state before any move.
-  const pockets = currentPly >= 0
-    ? gameData.frames[currentPly].pockets
-    : { a_w: "\u2014", a_b: "\u2014", b_w: "\u2014", b_b: "\u2014" };
-  els.pocketAW.textContent = pockets.a_w;
-  els.pocketAB.textContent = pockets.a_b;
-  els.pocketBW.textContent = pockets.b_w;
-  els.pocketBB.textContent = pockets.b_b;
+    function renderPly() {
+      if (!gameData) return;
 
-  document.querySelectorAll(".move-row").forEach(row => {
-    row.classList.toggle("current", Number(row.dataset.ply) === currentPly);
-  });
-  if (currentPly >= 0) {
-    document.querySelector(`.move-row[data-ply="${currentPly}"]`)
-      ?.scrollIntoView({ block: "nearest" });
-  }
+      let svgA = gameData.start_svg, svgB = gameData.start_svg;
+      let movedThisPly = null;
+      for (let i = 0; i <= currentPly; i++) {
+        const f = gameData.frames[i];
+        if (f.board === "A") svgA = f.svg; else svgB = f.svg;
+        if (i === currentPly) movedThisPly = f.board;
+      }
+      els.svgA.innerHTML = svgA;
+      els.svgB.innerHTML = svgB;
+      els.labelA.classList.toggle("moved", movedThisPly === "A");
+      els.labelB.classList.toggle("moved", movedThisPly === "B");
 
-  els.plyCounter.textContent = currentPly < 0
-    ? "Start"
-    : `Move ${currentPly + 1} of ${gameData.frame_count}`;
-  els.btnFirst.disabled = els.btnPrev.disabled = currentPly < 0;
-  els.btnLast.disabled = els.btnNext.disabled = currentPly >= gameData.frame_count - 1;
-}
+      const pockets = currentPly >= 0
+        ? gameData.frames[currentPly].pockets
+        : { a_w: "\u2014", a_b: "\u2014", b_w: "\u2014", b_b: "\u2014" };
+      els.pocketAW.textContent = pockets.a_w;
+      els.pocketAB.textContent = pockets.a_b;
+      els.pocketBW.textContent = pockets.b_w;
+      els.pocketBB.textContent = pockets.b_b;
 
-els.select.onchange = () => { if (els.select.value) loadGame(els.select.value); };
-els.btnFirst.onclick = () => { currentPly = -1; renderPly(); };
-els.btnPrev.onclick = () => { currentPly = Math.max(-1, currentPly - 1); renderPly(); };
-els.btnNext.onclick = () => { currentPly = Math.min(gameData.frame_count - 1, currentPly + 1); renderPly(); };
-els.btnLast.onclick = () => { currentPly = gameData.frame_count - 1; renderPly(); };
-document.addEventListener("keydown", (e) => {
-  if (!gameData) return;
-  if (e.key === "ArrowLeft") els.btnPrev.onclick();
-  if (e.key === "ArrowRight") els.btnNext.onclick();
-});
+      const [countA, countB] = revealedCounts(currentPly);
+      buildMoveTable(els.movesA, sanLogA, countA, "A", currentPly);
+      buildMoveTable(els.movesB, sanLogB, countB, "B", currentPly);
 
-loadGameList();
-</script>
+      els.plyCounter.textContent = currentPly < 0
+        ? "Start"
+        : `Move ${currentPly + 1} of ${gameData.frame_count}`;
+      els.btnFirst.disabled = els.btnPrev.disabled = currentPly < 0;
+      els.btnLast.disabled = els.btnNext.disabled = currentPly >= gameData.frame_count - 1;
+    }
+
+    els.select.onchange = () => { if (els.select.value) loadGame(els.select.value); };
+    els.btnFirst.onclick = () => { currentPly = -1; renderPly(); };
+    els.btnPrev.onclick = () => { currentPly = Math.max(-1, currentPly - 1); renderPly(); };
+    els.btnNext.onclick = () => { currentPly = Math.min(gameData.frame_count - 1, currentPly + 1); renderPly(); };
+    els.btnLast.onclick = () => { currentPly = gameData.frame_count - 1; renderPly(); };
+    document.addEventListener("keydown", (e) => {
+      if (!gameData) return;
+      if (e.key === "ArrowLeft") els.btnPrev.onclick();
+      if (e.key === "ArrowRight") els.btnNext.onclick();
+    });
+
+    loadGameList();
+  </script>
 </body>
+
 </html>

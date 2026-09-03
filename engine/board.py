@@ -1,4 +1,5 @@
 
+import string
 import json
 import re
 
@@ -106,8 +107,10 @@ class BughouseGame:
         self.board_b.partner = self.board_a
 
     def assign_roles(self, team_a_roles=("attacker", "defender"), team_b_roles=("attacker", "defender")):
-        self.board_a_roles = {chess.WHITE: team_a_roles[0], chess.BLACK: team_b_roles[0]}
-        self.board_b_roles = {chess.WHITE: team_b_roles[1], chess.BLACK: team_b_roles[1]}
+        """team_x_roles = (role of that team's Board-A seat, role of its Board-B seat).
+        TEAM A holds White on A + Black on B; TEAM B holds Black on A + White on B."""
+        self.board_a.roles = {chess.WHITE: team_a_roles[0], chess.BLACK: team_b_roles[0]}
+        self.board_b.roles = {chess.WHITE: team_b_roles[1], chess.BLACK: team_a_roles[1]}
 
     def on_move_made(self, board: BughouseBoard, move: chess.Move) -> None:
         san_body = board._algebraic_without_suffix(move) 
@@ -136,9 +139,9 @@ class BughouseGame:
                 elif label == 'B' and res == 0:
                     return (True,"TEAM A (White on A, " + f"\033[4m{"Black on B"}\033[0m" + ") WINS!")
                 elif label == 'A' and res == 0:
-                    return (True,"TEAM A (White on B, " + f"\033[4m{"Black on A"}\033[0m" + ") WINS!")
+                    return (True,"TEAM B (White on B, " + f"\033[4m{"Black on A"}\033[0m" + ") WINS!")
                 elif label == 'B' and res == 1:
-                    return (True,"TEAM A (" +f"\033[4m{"White on B"}\033[0m"  ", Black on A) WINS!")
+                    return (True,"TEAM B (" +f"\033[4m{"White on B"}\033[0m"  ", Black on A) WINS!")
                 elif res == 2:
                     return (True, "DRAW (Stalemate)")
                 elif res == 3:
@@ -202,7 +205,7 @@ class BughouseGame:
                 "ply": i,
                 "board": label,
                 "san": board.san_log[-1],
-                "svg": chess.svg.board(board, size=360),
+                "svg": chess.svg.board(board, size=360, flipped=(label == "B")),
                 "pockets": {
                     "a_w": pocket_text(self.board_a, chess.WHITE),
                     "a_b": pocket_text(self.board_a, chess.BLACK),
@@ -212,14 +215,22 @@ class BughouseGame:
             })
         return frames
 
-    def run_self_play_game(self, move: chess.Move, max_moves: int = 500) -> int:
+    def run_self_play_game(self, move, debug_function=None, max_moves: int = 500, debug: bool = False, move_to_debug: string = None) -> int:
         boards = [self.board_a, self.board_b]
         turn = 0
         over = 0
         res = None
         while not over and turn < max_moves:
             current_board = boards[turn%2]
-            next_move = move(current_board)
+            if debug:
+                next_move, root = move(current_board, debug=True)
+                print(next_move.uci())
+                if next_move.uci() == move_to_debug:
+                    print("here")
+                    debug_function(root, f"{move_to_debug}_investigation.html")
+            else:
+                next_move = move(current_board)
+
             self.on_move_made(current_board, next_move)
             turn += 1 #Alternates board turns, i.e moves on board 1 first then moves on board 2
             over, res = self.winner()

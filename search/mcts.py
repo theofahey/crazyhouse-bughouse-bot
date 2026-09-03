@@ -13,6 +13,7 @@ still run and still produce a number, it'll just be silently wrong.
 from math import sqrt
 import math
 from engine.eval import evaluate
+from search.tree_viz import export_tree_html
 
 MATERIAL_SCALE = 6  # tuned so a rook+pawn material edge lands ~0.5;
 
@@ -42,7 +43,7 @@ class MCTSNode:
 def _leaf_value(board) -> float:
     over, res = board.is_over_board()
     if over: 
-        if res == 1 or res == 2: 
+        if res == 0 or res == 1: 
             return -1.0
         else: 
             return 0.0
@@ -78,12 +79,20 @@ def _backpropagate(node: MCTSNode, value: float) -> None:
         value = -value
         node = node.parent
 
-def search(root_board, iterations: int = 300):
+def find_child_by_move(node, uci):
+    for child in node.children:
+        if child.move.uci() == uci:
+            return child
+    return None
+
+def search(root_board, iterations: int = 4000, debug: bool = False):
     """Run MCTS from root_board, return the move with the most visits
     (not highest raw value -- visit count reflects how much the search
     actually trusts a branch, which is the more robust choice at the end).
     """
     root = MCTSNode(root_board.copy())
+    if debug:
+        iterations = 15000
     for i in range(iterations):
         leaf = _select(root)
         if not leaf.is_terminal():
@@ -92,5 +101,7 @@ def search(root_board, iterations: int = 300):
         _backpropagate(leaf, value)
 
     best_child = max(root.children, key=lambda c: c.visits)
+    if debug:
+        return best_child.move, root    
     return best_child.move
 

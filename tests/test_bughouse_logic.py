@@ -7,6 +7,8 @@ diagonal pocket routing on capture.
 
 import chess
 from engine.board import BughouseGame
+from search.tree_viz import export_tree_html
+
 import search.random_agent as random_agent
 import search.mcts as mcts
 
@@ -42,11 +44,11 @@ def test_black_capture_goes_to_white_partner_pocket():
     board_b.push_san("Nc6")
     board_b.push_san("Ne5")
     board_b.push_san("Nxe5")
-    assert len(board_a.pockets[0]) == 0
-    assert len(board_a.pockets[1]) == 1
-    assert len(board_b.pockets[1]) == 0
-    assert len(board_b.pockets[0]) == 0
-    assert board_a.pockets[1].count(chess.KNIGHT) == 1
+    assert len(board_a.pockets[chess.BLACK]) == 0
+    assert len(board_a.pockets[chess.WHITE]) == 1
+    assert len(board_b.pockets[chess.BLACK]) == 0
+    assert len(board_b.pockets[chess.WHITE]) == 0
+    assert board_a.pockets[chess.WHITE].count(chess.KNIGHT) == 1
 
 
 def test_promoted_piece_still_reverts_to_pawn_when_routed_to_partner():
@@ -118,7 +120,7 @@ def test_run_self_play_game_with_random_agent():
 def test_run_self_play_game_with_mcts_agent():
     game = BughouseGame()
     game.assign_roles()
-    num_turns, res = game.run_self_play_game(mcts.search, max_moves=200)
+    num_turns, res = game.run_self_play_game(mcts.search, max_moves=200, debug=True, move_to_debug="h5h7", debug_function=export_tree_html)
 
     print([move.uci() for move in game.board_a.move_stack])
     print([move.uci() for move in game.board_b.move_stack])
