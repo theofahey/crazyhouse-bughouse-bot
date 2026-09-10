@@ -149,7 +149,24 @@ class BughouseGame:
                     return "UNKNOWN RESULT"
 
         return (False, None)
-    
+
+    def result(self) -> str | None:
+        """Machine-readable outcome for match tallying: 'A', 'B', 'draw', or
+        None if still in progress. TEAM A = White on Board A + Black on Board B;
+        TEAM B = Black on Board A + White on Board B. (winner() returns a
+        human display string with ANSI; this doesn't.)"""
+        for board, label in ((self.board_a, 'A'), (self.board_b, 'B')):
+            over, res = board.is_over_board()
+            if not over:
+                continue
+            if res in (2, 3):  # stalemate / repetition
+                return "draw"
+            white_won = res == 1  # res is int(not turn) on checkmate
+            if label == 'A':
+                return "A" if white_won else "B"
+            return "B" if white_won else "A"
+        return None
+
     def export_pgn_text(self, match_id: str = "game1") -> tuple[str, str]:
         """Hand-rolled, not chess.pgn -- that machinery reconstructs a
         disconnected board from headers alone and can't replay bughouse
