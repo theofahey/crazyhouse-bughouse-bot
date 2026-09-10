@@ -35,15 +35,16 @@ def main(argv=None):
 
     def on_match(si, sj, rec):
         if not args.quiet:
+            # flush so progress is visible when stdout is redirected to a file
             print(f"  {si} vs {sj}: +{rec.wins} ={rec.draws} -{rec.losses}  "
-                  f"(Elo Δ {rec.elo:+.0f})")
+                  f"(Elo Δ {rec.elo:+.0f})", flush=True)
 
     result = run_round_robin(
         args.agents, games_per_pair=args.games, seed=args.seed,
         opening_plies=args.opening_plies, max_plies=args.max_plies, on_match=on_match,
     )
-    print("-" * 60)
-    print(result)
+    print("-" * 60, flush=True)
+    print(result, flush=True)
 
 
 if __name__ == "__main__":
