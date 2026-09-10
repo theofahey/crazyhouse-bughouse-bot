@@ -8,14 +8,43 @@ whoever was about to move AT THAT NODE. Flip the sign at every step during
 backpropagation -- turns alternate, so a good outcome one level down is a
 bad outcome at the level above it. Get this backwards and the search will
 still run and still produce a number, it'll just be silently wrong.
+
+Selection (A.6): plain UCB1 was useless here -- leaf values are
+tanh(evaluate/scale) ~= +/-0.05 near balance, so the exploration term
+dwarfed exploitation ~10-50x and every child got visited round-robin
+regardless of budget. Two fixes:
+  * the exploitation term is min-max normalised across siblings, so the
+    exploration constant stays meaningful no matter how evaluate() is scaled;
+  * progressive widening (children capped at ~C_PW*sqrt(visits)) plus a
+    cheap capture / king-attacking-drop move order, so the budget goes
+    DEEP on a few plausible moves instead of one visit each across 100+.
 """
 
 from math import sqrt
 import math
+
+import chess
+
 from engine.eval import evaluate
 
 MATERIAL_SCALE = 6  # tuned so a rook+pawn material edge lands ~0.5;
 DEFAULT_ITERATIONS = 4000  # simulations per move; retuned later against the match harness
+EXPLORATION = math.sqrt(2)
+C_PW = 2.0  # progressive-widening constant: children <= ceil(C_PW * sqrt(visits))
+
+
+def _move_priority(board, move) -> int:
+    """Cheap ordering key (higher = expand sooner). Captures first, then
+    drops next to the enemy king, then everything else. No board mutation."""
+    score = 0
+    if board.is_capture(move):
+        score += 2
+    if move.drop is not None:
+        enemy_king = board.king(not board.turn)
+        if enemy_king is not None and chess.square_distance(move.to_square, enemy_king) <= 2:
+            score += 1
+    return score
+
 
 class MCTSNode:
     def __init__(self, board, parent=None, move=None):
@@ -23,44 +52,63 @@ class MCTSNode:
         self.parent = parent
         self.move = move
         self.children = []
-        self.untried_moves = list(board.legal_moves)  
+        # sorted so untried_moves.pop() (from the end) yields the
+        # highest-priority move first; stable, so ties keep legal-move order.
+        self.untried_moves = sorted(board.legal_moves, key=lambda m: _move_priority(board, m))
         self.visits = 0
         self.value = 0.0
 
     def is_terminal(self) -> bool:
         return self.board.is_over_board()[0]
 
-    def is_fully_expanded(self) -> bool:
-        return len(self.untried_moves) == 0
+    def q(self) -> float:
+        """Mean value from the PARENT's perspective (good child = bad for
+        the node above it, hence the sign flip)."""
+        return -self.value / self.visits if self.visits else 0.0
 
-    def ucb1(self, exploration=math.sqrt(2)) -> float:
+    def widening_cap(self) -> int:
+        return max(1, math.ceil(C_PW * sqrt(self.visits)))
 
-        exploit = -self.value /self.visits
-        explore = exploration * sqrt(math.log(self.parent.visits) / self.visits)
+    def can_expand(self) -> bool:
+        return bool(self.untried_moves) and len(self.children) < self.widening_cap()
 
-        return exploit + explore 
-        
+
 def _leaf_value(board) -> float:
     over, res = board.is_over_board()
-    if over: 
-        if res == 0 or res == 1: 
+    if over:
+        if res == 0 or res == 1:
             return -1.0
-        else: 
+        else:
             return 0.0
-    else: 
+    else:
         return math.tanh(evaluate(board) / MATERIAL_SCALE)
 
+
+def _best_child(node: MCTSNode) -> MCTSNode:
+    """UCB1 with the exploitation term min-max normalised across siblings."""
+    qs = [c.q() for c in node.children]
+    lo, hi = min(qs), max(qs)
+    span = (hi - lo) or 1.0
+    log_n = math.log(node.visits)
+    best, best_score = None, -math.inf
+    for child, qv in zip(node.children, qs):
+        score = (qv - lo) / span + EXPLORATION * sqrt(log_n / child.visits)
+        if score > best_score:
+            best, best_score = child, score
+    return best
+
+
 def _select(node: MCTSNode) -> MCTSNode:
-    """Walk down via UCB1 until we hit a node that's either terminal or
-    still has untried moves."""
-    while not node.is_terminal() and node.is_fully_expanded():
-        node = max(node.children, key=lambda c: c.ucb1())
+    """Walk down until we hit a node that's terminal or still has room to
+    widen (an untried move under the widening cap)."""
+    while not node.is_terminal() and not node.can_expand():
+        node = _best_child(node)
     return node
 
 
 def _expand(node: MCTSNode) -> MCTSNode:
-    """Called on non-terminal nodes with untried moves. Pops a move,
-    creates exactly one new child."""
+    """Called on non-terminal nodes with room to widen. Pops the
+    highest-priority untried move, creates exactly one new child."""
     new_move = node.untried_moves.pop()
     new_board = node.board.copy()
     new_board.push(new_move)
@@ -110,4 +158,3 @@ def make_mcts_agent(iterations: int = DEFAULT_ITERATIONS):
     """Return a ``(board) -> Move`` agent that runs MCTS for ``iterations``
     simulations per move."""
     return lambda board: search(board, iterations)
-

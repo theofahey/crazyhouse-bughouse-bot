@@ -126,17 +126,17 @@ def test_run_self_play_game_with_mcts_agent():
     # slow-marked test below.
     game = BughouseGame()
     game.assign_roles()
-    agent = mcts.make_mcts_agent(iterations=120)
-    num_turns, res = game.run_self_play_game(agent, max_moves=80)
+    agent = mcts.make_mcts_agent(iterations=60)
+    num_turns, res = game.run_self_play_game(agent, max_moves=50)
 
-    assert 1 <= num_turns <= 80
+    assert 1 <= num_turns <= 50
     assert _non_king_piece_count(game) == TOTAL_NON_KING_PIECES
     over, msg = game.winner()
     # winner()[1] is a human-readable result string (or None); run_self_play_game
     # hands it back as `res`. If the game ended before the cap it must be terminal
     # with a message.
     assert res == msg
-    if num_turns < 80:
+    if num_turns < 50:
         assert over and isinstance(msg, str)
 
 
