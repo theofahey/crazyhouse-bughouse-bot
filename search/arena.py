@@ -6,6 +6,7 @@ as spec strings so a fresh agent can be built per game:
 
     random        uniform-random, seeded per game
     random:7      uniform-random, fixed seed 7
+    greedy        1-ply argmax of evaluate()
     mcts          MCTS at DEFAULT_ITERATIONS
     mcts:800      MCTS at 800 iterations/move
 
@@ -21,6 +22,7 @@ from dataclasses import dataclass
 import chess
 
 from engine.board import BughouseGame
+from search.greedy_agent import make_greedy_agent
 from search.mcts import DEFAULT_ITERATIONS, make_mcts_agent
 from search.random_agent import make_random_agent
 
@@ -33,6 +35,8 @@ def build_agent(spec: str, *, fallback_seed: int | None = None):
     name, _, arg = spec.partition(":")
     if name == "random":
         return make_random_agent(seed=int(arg) if arg else fallback_seed)
+    if name == "greedy":
+        return make_greedy_agent()
     if name == "mcts":
         return make_mcts_agent(iterations=int(arg) if arg else DEFAULT_ITERATIONS)
     raise ValueError(f"unknown agent spec: {spec!r}")
