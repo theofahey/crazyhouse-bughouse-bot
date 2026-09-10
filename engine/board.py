@@ -1,5 +1,4 @@
 
-import string
 import json
 import re
 
@@ -215,24 +214,25 @@ class BughouseGame:
             })
         return frames
 
-    def run_self_play_game(self, move, debug_function=None, max_moves: int = 500, debug: bool = False, move_to_debug: string = None) -> int:
+    def run_self_play_game(self, agent, *, max_moves: int = 500, on_move=None) -> tuple[int, int | None]:
+        """Play both boards with `agent`, a callable (BughouseBoard) -> Move,
+        alternating boards each ply (board A, then board B, then A, ...).
+
+        `on_move(ply, board, move)`, if given, is called after every move --
+        a generic observer hook for logging/inspection, with no coupling to
+        any particular agent. Returns (plies_played, result_code), where
+        result_code is winner()'s second element (None if max_moves hit)."""
         boards = [self.board_a, self.board_b]
         turn = 0
         over = 0
         res = None
         while not over and turn < max_moves:
-            current_board = boards[turn%2]
-            if debug:
-                next_move, root = move(current_board, debug=True)
-                print(next_move.uci())
-                if next_move.uci() == move_to_debug:
-                    print("here")
-                    debug_function(root, f"{move_to_debug}_investigation.html")
-            else:
-                next_move = move(current_board)
-
+            current_board = boards[turn % 2]
+            next_move = agent(current_board)
             self.on_move_made(current_board, next_move)
-            turn += 1 #Alternates board turns, i.e moves on board 1 first then moves on board 2
+            if on_move is not None:
+                on_move(turn, current_board, next_move)
+            turn += 1
             over, res = self.winner()
         return (turn, res)
         

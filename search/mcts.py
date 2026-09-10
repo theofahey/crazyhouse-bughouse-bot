@@ -13,9 +13,9 @@ still run and still produce a number, it'll just be silently wrong.
 from math import sqrt
 import math
 from engine.eval import evaluate
-from search.tree_viz import export_tree_html
 
 MATERIAL_SCALE = 6  # tuned so a rook+pawn material edge lands ~0.5;
+DEFAULT_ITERATIONS = 4000  # simulations per move; retuned later against the match harness
 
 class MCTSNode:
     def __init__(self, board, parent=None, move=None):
@@ -85,14 +85,14 @@ def find_child_by_move(node, uci):
             return child
     return None
 
-def search(root_board, iterations: int = 4000, debug: bool = False):
+def search(root_board, iterations: int = DEFAULT_ITERATIONS, *, return_tree: bool = False):
     """Run MCTS from root_board, return the move with the most visits
     (not highest raw value -- visit count reflects how much the search
     actually trusts a branch, which is the more robust choice at the end).
+    With return_tree=True, return (move, root_node) so callers can inspect
+    the tree (e.g. search.tree_viz.export_tree_html).
     """
     root = MCTSNode(root_board.copy())
-    if debug:
-        iterations = 15000
     for i in range(iterations):
         leaf = _select(root)
         if not leaf.is_terminal():
@@ -101,7 +101,13 @@ def search(root_board, iterations: int = 4000, debug: bool = False):
         _backpropagate(leaf, value)
 
     best_child = max(root.children, key=lambda c: c.visits)
-    if debug:
-        return best_child.move, root    
+    if return_tree:
+        return best_child.move, root
     return best_child.move
+
+
+def make_mcts_agent(iterations: int = DEFAULT_ITERATIONS):
+    """Return a ``(board) -> Move`` agent that runs MCTS for ``iterations``
+    simulations per move."""
+    return lambda board: search(board, iterations)
 

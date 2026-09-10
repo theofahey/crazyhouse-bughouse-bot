@@ -11,3 +11,6 @@ __pycache__/
 # Testing caches
 .pytest_cache/
 .coverage
+
+# scripts/selfplay.py --dump-tree output
+*_investigation.html

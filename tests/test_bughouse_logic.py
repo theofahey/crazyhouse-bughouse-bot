@@ -5,9 +5,9 @@ these tests only cover the bughouse-specific behavior we're adding on top:
 diagonal pocket routing on capture.
 """
 
+import pytest
 import chess
 from engine.board import BughouseGame
-from search.tree_viz import export_tree_html
 
 import search.random_agent as random_agent
 import search.mcts as mcts
@@ -96,10 +96,11 @@ def test_material_conserved_throughout_random_game():
 
     assert _non_king_piece_count(game) == TOTAL_NON_KING_PIECES
 
+    agent = random_agent.make_random_agent(seed=0)
     moves_played = 0
     while not game.winner()[0] and moves_played < 300:
         board = boards[moves_played % 2]
-        move = random_agent.pick_move(board)
+        move = agent(board)
         game.on_move_made(board, move)
         moves_played += 1
 
@@ -108,30 +109,47 @@ def test_material_conserved_throughout_random_game():
         )
 
 def test_run_self_play_game_with_random_agent():
-    # Will run a round of self play chess with a max steps value of 3,000.
-    # Will test to ensure the game reaches an end state, and max_steps hasn't been reached. 
-    # It's theoretically possible for max_steps to be reached (without any errors) since moves are chosen randomly but it's essentially impossible
+    # A random game essentially always reaches a terminal state well before
+    # the cap; hitting max_moves without error is possible but vanishingly
+    # unlikely. Seeded so any failure reproduces.
     game = BughouseGame()
-    num_turns, res = game.run_self_play_game(random_agent.pick_move, max_moves=1000)
-    print(res)
+    agent = random_agent.make_random_agent(seed=0)
+    num_turns, res = game.run_self_play_game(agent, max_moves=1000)
     assert num_turns < 1000
     assert game.winner()[0]
 
 def test_run_self_play_game_with_mcts_agent():
+    # Fast smoke test: the MCTS agent plays legal moves through the harness
+    # without crashing and conserves material. MCTS has no RNG, so this is
+    # deterministic -- but assertions stay structural, not pinned to the
+    # current eval's exact result. The full-length game lives in the
+    # slow-marked test below.
     game = BughouseGame()
     game.assign_roles()
-    num_turns, res = game.run_self_play_game(mcts.search, max_moves=200, debug=True, move_to_debug="h5h7", debug_function=export_tree_html)
+    agent = mcts.make_mcts_agent(iterations=120)
+    num_turns, res = game.run_self_play_game(agent, max_moves=80)
 
-    print([move.uci() for move in game.board_a.move_stack])
-    print([move.uci() for move in game.board_b.move_stack])
-    print("----------------------------")
+    assert 1 <= num_turns <= 80
+    assert _non_king_piece_count(game) == TOTAL_NON_KING_PIECES
+    over, msg = game.winner()
+    # winner()[1] is a human-readable result string (or None); run_self_play_game
+    # hands it back as `res`. If the game ended before the cap it must be terminal
+    # with a message.
+    assert res == msg
+    if num_turns < 80:
+        assert over and isinstance(msg, str)
 
-    print(res)
 
-    assert num_turns < 300
-    assert game.winner()[0]
+@pytest.mark.slow
+def test_mcts_self_play_full_game():
+    # Fuller exercise: a complete game at a realistic iteration budget.
+    # Skipped by default (see pyproject addopts); run with `pytest -m slow`.
+    game = BughouseGame()
+    game.assign_roles()
+    agent = mcts.make_mcts_agent(iterations=800)
+    num_turns, res = game.run_self_play_game(agent, max_moves=200)
 
-    game.save_game_logs("saved_games/game_1.json")
-
-    assert False
+    assert num_turns <= 200
+    assert game.winner()[0], "expected the game to reach a terminal state"
+    assert _non_king_piece_count(game) == TOTAL_NON_KING_PIECES
 

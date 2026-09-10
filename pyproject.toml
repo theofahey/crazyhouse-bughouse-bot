@@ -1,3 +1,7 @@
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
+addopts = "-m 'not slow'"
+markers = [
+    "slow: full-length games / high iteration counts; skipped by default (run with -m slow, or -m '' for everything)",
+]
