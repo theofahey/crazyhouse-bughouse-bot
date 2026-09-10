@@ -1,7 +1,15 @@
 import chess
 import pytest
 
-from search.arena import build_agent, elo_delta, play_game, play_match, two_agent_dispatch
+from search.arena import (
+    _bt_ratings,
+    build_agent,
+    elo_delta,
+    play_game,
+    play_match,
+    run_round_robin,
+    two_agent_dispatch,
+)
 
 
 def test_elo_delta_even_record():
@@ -73,6 +81,27 @@ def test_two_agent_dispatch_labels_movers():
     assert set(movers[3:]) <= {"x", "y"}
     # ply 3 = board B, Black to move (White moved on ply 1) -> Black-on-B is team A -> X
     assert movers[3] == "x"
+
+
+def test_bt_ratings_order_a_beats_b_beats_c():
+    # synthetic round-robin: A sweeps B, B sweeps C, A sweeps C
+    specs = ["A", "B", "C"]
+    games = [[0, 10, 10], [10, 0, 10], [10, 10, 0]]
+    total_wins = [20.0, 10.0, 0.0]
+    r = _bt_ratings(specs, total_wins, games)
+    assert r["A"] > r["B"] > r["C"]
+    assert abs(r["A"] + r["B"] + r["C"]) < 1e-6  # mean 0
+
+
+def test_run_round_robin_is_deterministic_and_ranks_greedy_over_random():
+    kw = dict(games_per_pair=4, seed=0, opening_plies=2)
+    r1 = run_round_robin(["greedy", "random", "random:1"], **kw)
+    r2 = run_round_robin(["greedy", "random", "random:1"], **kw)
+    assert r1.ratings == r2.ratings
+    assert r1.ratings["greedy"] > r1.ratings["random"]
+    # every agent's totals sum to games it played (2 opponents * 4 games)
+    for spec, (w, d, l) in r1.totals.items():
+        assert w + d + l == 8
 
 
 @pytest.mark.slow

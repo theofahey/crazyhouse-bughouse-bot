@@ -156,3 +156,83 @@ def play_match(spec_x: str, spec_y: str, *, games: int = 20, seed: int = 0,
 
     elo, lo, hi = elo_delta(wins, draws, losses)
     return MatchRecord(spec_x, spec_y, games, wins, draws, losses, elo, lo, hi)
+
+
+def _bt_ratings(specs, total_wins, games_matrix, *, prior_games=2.0,
+                iters=1000, tol=1e-10) -> dict:
+    """Bradley-Terry strengths from a round-robin, solved by MM iteration,
+    converted to Elo (mean 0). `total_wins[i]` counts draws as half. A light
+    `prior_games` (a virtual 50%% opponent at strength 1) keeps an unbeaten
+    or winless agent's rating finite."""
+    n = len(specs)
+    w = [total_wins[i] + prior_games / 2.0 for i in range(n)]
+    p = [1.0] * n
+    for _ in range(iters):
+        nxt = []
+        for i in range(n):
+            denom = prior_games / (p[i] + 1.0)
+            for j in range(n):
+                if j != i and games_matrix[i][j]:
+                    denom += games_matrix[i][j] / (p[i] + p[j])
+            nxt.append(w[i] / denom)
+        gm = math.exp(sum(math.log(x) for x in nxt) / n)
+        nxt = [x / gm for x in nxt]
+        if max(abs(a - b) for a, b in zip(nxt, p)) < tol:
+            p = nxt
+            break
+        p = nxt
+    return {s: round(400.0 * math.log10(p[i]), 1) for i, s in enumerate(specs)}
+
+
+@dataclass
+class TournamentResult:
+    specs: list
+    records: dict          # (spec_i, spec_j) with i<j in `specs` order -> MatchRecord
+    ratings: dict          # spec -> Elo (mean 0)
+    totals: dict           # spec -> (wins, draws, losses) aggregated over all its games
+
+    def __str__(self) -> str:
+        order = sorted(self.specs, key=lambda s: self.ratings[s], reverse=True)
+        width = max(len(s) for s in self.specs)
+        lines = [f"{'agent':<{width}}    Elo   score   W-D-L (all games)"]
+        for s in order:
+            wi, di, li = self.totals[s]
+            g = wi + di + li
+            pct = (wi + 0.5 * di) / g if g else 0.0
+            lines.append(f"{s:<{width}}  {self.ratings[s]:+6.0f}  {pct:5.1%}   "
+                         f"{wi}-{di}-{li}")
+        return "\n".join(lines)
+
+
+def run_round_robin(specs, *, games_per_pair: int = 8, seed: int = 0,
+                    opening_plies: int = OPENING_PLIES, max_plies: int = MAX_PLIES,
+                    on_match=None) -> TournamentResult:
+    """Every unordered pair of `specs` plays `games_per_pair` games (sides
+    swapped each game, deterministic per `seed`). Returns pairwise
+    `MatchRecord`s, per-agent W/D/L totals, and Bradley-Terry Elo ratings.
+    `on_match(spec_i, spec_j, record)` fires after each pair."""
+    specs = list(specs)
+    n = len(specs)
+    records: dict = {}
+    totals = {s: [0, 0, 0] for s in specs}
+    games_matrix = [[0] * n for _ in range(n)]
+    wins_vec = [0.0] * n
+
+    for a in range(n):
+        for b in range(a + 1, n):
+            si, sj = specs[a], specs[b]
+            # unique per-pair seed so pairs don't share the same games
+            rec = play_match(si, sj, games=games_per_pair, seed=seed + 1000 * (a * n + b),
+                             opening_plies=opening_plies, max_plies=max_plies)
+            records[(si, sj)] = rec
+            totals[si][0] += rec.wins;   totals[si][1] += rec.draws; totals[si][2] += rec.losses
+            totals[sj][0] += rec.losses; totals[sj][1] += rec.draws; totals[sj][2] += rec.wins
+            games_matrix[a][b] = games_matrix[b][a] = rec.games
+            wins_vec[a] += rec.wins + 0.5 * rec.draws
+            wins_vec[b] += rec.losses + 0.5 * rec.draws
+            if on_match is not None:
+                on_match(si, sj, rec)
+
+    ratings = _bt_ratings(specs, wins_vec, games_matrix)
+    return TournamentResult(specs, records, ratings,
+                            {s: tuple(totals[s]) for s in specs})
