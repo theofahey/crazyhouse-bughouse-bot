@@ -15,7 +15,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from search.arena import OPENING_PLIES, run_round_robin  # noqa: E402
+from search.arena import MAX_PLIES, OPENING_PLIES, run_round_robin  # noqa: E402
 
 
 def main(argv=None):
@@ -28,6 +28,8 @@ def main(argv=None):
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--opening-plies", type=int, default=OPENING_PLIES,
                    help=f"seeded-random plies before the agents take over (default {OPENING_PLIES})")
+    p.add_argument("--max-plies", type=int, default=MAX_PLIES,
+                   help=f"ply cap; a game hitting it scores as a draw (default {MAX_PLIES})")
     p.add_argument("--quiet", action="store_true", help="suppress per-match progress")
     args = p.parse_args(argv)
 
@@ -38,7 +40,7 @@ def main(argv=None):
 
     result = run_round_robin(
         args.agents, games_per_pair=args.games, seed=args.seed,
-        opening_plies=args.opening_plies, on_match=on_match,
+        opening_plies=args.opening_plies, max_plies=args.max_plies, on_match=on_match,
     )
     print("-" * 60)
     print(result)
