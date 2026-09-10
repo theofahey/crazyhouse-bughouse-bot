@@ -48,27 +48,40 @@ def _team_a_to_move(ply: int, board) -> bool:
     return (ply % 2 == 0) == (board.turn == chess.WHITE)
 
 
-def play_game(agent_x, agent_y, *, x_is_team_a: bool, opening_seed: int,
-              opening_plies: int = OPENING_PLIES, max_plies: int = MAX_PLIES) -> str:
-    """Play one game; return 'x', 'y', or 'draw'."""
-    game = BughouseGame()
-    game.assign_roles()
+def two_agent_dispatch(agent_x, agent_y, *, x_is_team_a: bool, opening_seed: int,
+                       opening_plies: int = OPENING_PLIES):
+    """Build the per-ply move picker for a two-agent game: `opening_plies`
+    seeded-random moves, then `agent_x` on X's team and `agent_y` on the
+    other. Returns ``(dispatch, movers)`` where `dispatch(board) -> Move` is
+    passed to `run_self_play_game` and `movers` is a list that grows one
+    entry per ply, each ``"open"`` / ``"x"`` / ``"y"`` naming who moved."""
     opening = make_random_agent(seed=opening_seed)
     team_a_agent = agent_x if x_is_team_a else agent_y
     team_b_agent = agent_y if x_is_team_a else agent_x
-    state = {"ply": 0}
+    movers: list[str] = []
 
     def dispatch(board):
-        ply = state["ply"]
+        ply = len(movers)
         if ply < opening_plies:
-            move = opening(board)
-        else:
-            picker = team_a_agent if _team_a_to_move(ply, board) else team_b_agent
-            move = picker(board)
-        state["ply"] = ply + 1
-        return move
+            movers.append("open")
+            return opening(board)
+        team_a = _team_a_to_move(ply, board)
+        movers.append("x" if team_a == x_is_team_a else "y")
+        return (team_a_agent if team_a else team_b_agent)(board)
 
-    game.run_self_play_game(dispatch, max_moves=max_plies)
+    return dispatch, movers
+
+
+def play_game(agent_x, agent_y, *, x_is_team_a: bool, opening_seed: int,
+              opening_plies: int = OPENING_PLIES, max_plies: int = MAX_PLIES,
+              on_move=None) -> str:
+    """Play one game; return 'x', 'y', or 'draw'. `on_move(ply, board, move)`
+    is forwarded to `run_self_play_game` for logging/inspection."""
+    game = BughouseGame()
+    game.assign_roles()
+    dispatch, _ = two_agent_dispatch(agent_x, agent_y, x_is_team_a=x_is_team_a,
+                                     opening_seed=opening_seed, opening_plies=opening_plies)
+    game.run_self_play_game(dispatch, max_moves=max_plies, on_move=on_move)
 
     outcome = game.result()  # 'A' | 'B' | 'draw' | None
     if outcome in (None, "draw"):
