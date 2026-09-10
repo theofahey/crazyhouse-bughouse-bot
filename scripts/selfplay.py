@@ -106,12 +106,17 @@ def main(argv=None):
         moved = not board.turn  # board is post-move; the mover's colour flipped away
         own_kv = _king_vulnerability(board, moved)
         opp_kv = _king_vulnerability(board, board.turn)
+        # evaluate() is from the side-to-move's perspective; restate it the
+        # traditional engine way -- positive = White better on this board,
+        # negative = Black better.
+        white_eval = evaluate(board) if board.turn == chess.WHITE else -evaluate(board)
+        white_eval = white_eval or 0.0  # normalise -0.0
         pockets = (f"Aw:{pocket_text(game.board_a, chess.WHITE)} "
                    f"Ab:{pocket_text(game.board_a, chess.BLACK)} "
                    f"Bw:{pocket_text(game.board_b, chess.WHITE)} "
                    f"Bb:{pocket_text(game.board_b, chess.BLACK)}")
         print(f"{ply:3} {board_label} {movers[ply]:4} {board.san_log[-1]:7} "
-              f"eval(stm)={evaluate(board):+.2f} "
+              f"eval(W)={white_eval:+.2f} "
               f"Kvuln own/opp={own_kv:.2f}/{opp_kv:.2f}   {pockets}")
 
     num_turns, _ = game.run_self_play_game(
