@@ -18,6 +18,25 @@ regardless of budget. Two fixes:
   * progressive widening (children capped at ~C_PW*sqrt(visits)) plus a
     cheap capture / king-attacking-drop move order, so the budget goes
     DEEP on a few plausible moves instead of one visit each across 100+.
+
+EXPLORATION (A.7c): sqrt(2) is the classical UCB1 constant, derived for
+rewards that are raw win-probabilities in [0,1]. It was never re-derived
+after A.6 made `exploit` a per-selection, sibling-relative min-max
+normalisation -- which is *always* rescaled to fill exactly [0,1], however
+large the real value gap is. Consequence: even a maximally-confident
+exploitation signal (normalised exploit = 1.0, the best possible) barely
+edges out a 4-visit sibling's explore bonus, and past ~35 visits the
+maxed-out child's OWN score starts *decreasing* relative to an unvisited
+rival -- the search actively drifts away from a proven-best move instead of
+confirming it. Root cause of MCTS missing forced continuations (hanging
+material, missing short mates) regardless of iteration budget; see project
+notes / the A.7 investigation. Swept against a depth-2 minimax oracle
+(blunder-gap vs. the safest legal move) across ~14 mid-game positions, and
+against pick-stability as the iteration budget grows 1200->2400->4800:
+0.8 cut the average blunder gap ~5.5x (0.77 -> 0.14) and was the only
+candidate with zero flipped picks across all budgets (values below ~0.6
+start reintroducing instability -- premature lock-on to an early lucky
+sample that more budget then overturns, the mirror-image failure).
 """
 
 from math import sqrt
@@ -29,7 +48,7 @@ from engine.eval import evaluate
 
 MATERIAL_SCALE = 6  # tuned so a rook+pawn material edge lands ~0.5;
 DEFAULT_ITERATIONS = 4000  # simulations per move; retuned later against the match harness
-EXPLORATION = math.sqrt(2)
+EXPLORATION = 0.8  # see "EXPLORATION (A.7c)" above -- was sqrt(2), miscalibrated for normalised exploit
 C_PW = 2.0  # progressive-widening constant: children <= ceil(C_PW * sqrt(visits))
 
 
